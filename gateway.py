@@ -3,12 +3,12 @@ import pika
 from flask_cors import CORS
 import json
 import pybreaker
-
+import requests
 app = Flask(__name__)
 
 RABBITMQ_HOST = 'localhost'
 PRIMARY_QUEUE = 'pqr'
-BACKUP_QUEUE = 'pqrbk'
+BACKUP_QUEUE = 'pqrBackup'
 cors = CORS(app)
 
 # Circuit Breaker con los tres estados
@@ -19,9 +19,6 @@ circuit_breaker = pybreaker.CircuitBreaker(
 
 # Función para enviar el mensaje a la cola adecuada
 def send_to_queue(queue_name, message):
-    if queue_name == PRIMARY_QUEUE:
-        raise pybreaker.CircuitBreakerError("Error en la cola primaria")
-    else:
         connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST))
         channel = connection.channel()
         channel.queue_declare(queue=queue_name)
@@ -30,21 +27,27 @@ def send_to_queue(queue_name, message):
                             body=json.dumps(message))
         print(f" PQR enviado a la cola {queue_name}")
         connection.close()
+# Función para obtener la métrica de salud desde Prometheus
+def get_pqrs_status():
+    prometheus_response = requests.get("http://localhost:9090/api/v1/query?query=up{job=%22app_example%22}")
+    result = prometheus_response.json()
+    if result['data']['result'][0]['value'][1] == '0':
+        return False
+    return True
 
 # Función para hacer el cambio dinámico de la cola dependiendo del Circuit Breaker
 @circuit_breaker
 def send_message_with_circuit_breaker(message):
-    try:
+    if get_pqrs_status():
         print("Intentando usar la cola primaria")
         # Si el Circuit Breaker está cerrado o medio abierto, usa la cola primaria
         send_to_queue(PRIMARY_QUEUE, message)
         print("usa cola primaria")
-    except pybreaker.CircuitBreakerError:
+    elif pybreaker.CircuitBreakerError:
         print("Circuito abierto, usando la cola de respaldo")
         # Si el Circuit Breaker está abierto, cambia a la cola de respaldo
         send_to_queue(BACKUP_QUEUE, message)
-    except Exception as e:
-        print(f"Se produjo una excepción inesperada: {e}")
+        
 
 # Endpoint para recibir las peticiones de PQRS
 @app.route('/pqrs', methods=['POST'])
