@@ -6,15 +6,16 @@ import json
 app = Flask(__name__)
 
 RABBITMQ_HOST = 'localhost'
-QUEUE_NAME = 'pqr'
+queues = ['pqr','pqrBackup']
+QUEUE_NAME = queues[1]
 cors = CORS(app)
 
 def send_to_queue(message):
     connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
     channel = connection.channel()
-    channel.queue_declare(queue='pqr')
+    channel.queue_declare(queue=QUEUE_NAME)
     channel.basic_publish(exchange='',
-                        routing_key='pqr',
+                        routing_key=QUEUE_NAME,
                         body=json.dumps(message))
     print(" PQR enviado a la cola de mensajes ")
     connection.close()
