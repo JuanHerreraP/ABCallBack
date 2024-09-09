@@ -38,15 +38,18 @@ def get_pqrs_status():
 # Función para hacer el cambio dinámico de la cola dependiendo del Circuit Breaker
 @circuit_breaker
 def send_message_with_circuit_breaker(message):
-    if get_pqrs_status():
-        print("Intentando usar la cola primaria")
-        # Si el Circuit Breaker está cerrado o medio abierto, usa la cola primaria
+    try:
+        if get_pqrs_status():
+            print("Intentando usar la cola primaria")
+            # Si el Circuit Breaker está cerrado o medio abierto, usa la cola primaria
+            send_to_queue(PRIMARY_QUEUE, message)
+            print("usa cola primaria")
+        elif pybreaker.CircuitBreakerError:
+            print("Circuito abierto, usando la cola de respaldo")
+            # Si el Circuit Breaker está abierto, cambia a la cola de respaldo
+            send_to_queue(BACKUP_QUEUE, message)
+    except:
         send_to_queue(PRIMARY_QUEUE, message)
-        print("usa cola primaria")
-    elif pybreaker.CircuitBreakerError:
-        print("Circuito abierto, usando la cola de respaldo")
-        # Si el Circuit Breaker está abierto, cambia a la cola de respaldo
-        send_to_queue(BACKUP_QUEUE, message)
         
 
 # Endpoint para recibir las peticiones de PQRS
