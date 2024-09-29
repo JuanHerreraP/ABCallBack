@@ -56,6 +56,25 @@ def send_message_with_circuit_breaker(message):
     except:
         send_to_queue(PRIMARY_QUEUE, message)
         
+# Función para hacer el cambio dinámico de la cola dependiendo del Circuit Breaker
+@circuit_breaker
+def send_message_with_circuit_breaker_invalid_cert(message):
+    # Añadir el certificado del componente al mensaje
+    with open("./InvalidCert.pem", "r") as cert_file:
+        cert_data = cert_file.read()
+    message['certificado'] = cert_data
+
+    try:
+        if get_pqrs_status():
+            print("Intentando usar la cola primaria")
+            send_to_queue(PRIMARY_QUEUE, message)
+            print("usa cola primaria")
+        elif pybreaker.CircuitBreakerError:
+            print("Circuito abierto, usando la cola de respaldo")
+            send_to_queue(BACKUP_QUEUE, message)
+    except:
+        send_to_queue(PRIMARY_QUEUE, message)
+        
 
 # Endpoint para recibir las peticiones de PQRS
 @app.route('/pqrs', methods=['POST'])
@@ -74,6 +93,25 @@ def send_message():
     try:
         send_message_with_circuit_breaker(message)
         return jsonify({'success': 'Message sent to RabbitMQ'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/pqrs_invalid', methods=['POST'])
+def send_message_invalid_cert():
+    message = {
+        "nombre": request.json['nombre'],
+        "email": request.json['email'],
+        "asunto": request.json['asunto'],
+        "peticion": request.json['peticion'],
+        "certificado": "INVALID CERTIFICATE CONTENT"  # Simulating an invalid certificate
+    }
+    
+    if not message:
+        return jsonify({'error': 'No message provided'}), 400
+
+    try:
+        send_message_with_circuit_breaker_invalid_cert(message)
+        return jsonify({'success': 'Message sent to RabbitMQ with invalid certificate'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
