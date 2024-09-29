@@ -1,3 +1,5 @@
+# EntidadC.py
+
 import cryptography.x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import padding
@@ -6,6 +8,7 @@ from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.x509 import Name, NameAttribute, CertificateBuilder
 from cryptography.x509.oid import NameOID
 import datetime
+import os
 
 def Crear_Base():
     ca_private_key = rsa.generate_private_key(
@@ -48,6 +51,7 @@ def Crear_Base():
     print("CA creada.")
     return ca_private_key, ca_cert
 def Crear(ca_cert, clave_privada, cert_name):
+    cert_path = os.path.join(os.getcwd(), cert_name)
     private_key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
@@ -78,7 +82,7 @@ def Crear(ca_cert, clave_privada, cert_name):
     with open(cert_name, "wb") as f:
         f.write(cert.public_bytes(serialization.Encoding.PEM))
 
-    print("Certificado y clave privada generados.")
+    print(f"Certificado y clave privada generados en: {cert_path}")
 
 def Validar(cert_prueba, cert_base):
     with open(cert_prueba, "rb") as cert_file:

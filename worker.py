@@ -1,25 +1,37 @@
+# worker.py
+
 import pika
 import requests
 import json
+from EntidadC import Validar
 
 RABBITMQ_HOST = 'localhost'
 QUEUE_NAME = 'pqr'
 FLASK_API_URL = 'http://127.0.0.1:5000/receive_message' 
 
 def callback(ch, method, properties, body):
-    message = body.decode()
-    print(f" [x] Recibido: {json.loads(message)}")
-    
-    # Enviar el mensaje a la aplicación Flask
-    try:
-        response = requests.post(FLASK_API_URL, json=json.dumps(message))
-        if response.status_code == 200:
-            print(f" [x] Mensaje enviado a Flask: {message}")
-        else:
-            print(f" [!] Error enviando el mensaje a Flask: {response.status_code}")
-    except Exception as e:
-        print(f" [!] Excepción al enviar el mensaje a Flask: {e}")
+    message = json.loads(body.decode())
+    print(f" [x] Recibido: {message}")
 
+    # Extraer y validar el certificado del mensaje
+    certificado = message.get('certificado')
+    if certificado:
+        with open("cert_temp.pem", "w") as cert_file:
+            cert_file.write(certificado)
+        try:
+            Validar("cert_temp.pem", "ca_certificate.pem")
+            print("Certificado válido. Procesando mensaje...")
+            # Enviar el mensaje a la aplicación Flask
+            response = requests.post(FLASK_API_URL, json=json.dumps(message))
+            if response.status_code == 200:
+                print(f" [x] Mensaje enviado a Flask: {message}")
+            else:
+                print(f" [!] Error enviando el mensaje a Flask: {response.status_code}")
+        except Exception as e:
+            print(f"Certificado inválido. Error: {e}")
+    else:
+        print("No se encontró certificado en el mensaje.")
+        
 connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST))
 channel = connection.channel()
 
